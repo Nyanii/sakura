@@ -36,39 +36,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setIsLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
-        // Show verification notification if user just verified email
-        if (event === 'SIGNED_IN' && session.user.email_confirmed_at) {
-          toast({
-            title: "Account Verified! 🎉",
-            description: "Your email has been successfully verified. Welcome to SAKURAZE!",
-            duration: 5000,
-          });
+    async function getInitialSession() {
+      try {
+        setIsLoading(true);
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
+        
+        if (mounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            await fetchProfile(session.user.id);
+          }
         }
-      } else {
-        setProfile(null);
-        setIsLoading(false);
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        toast({
+          title: "Auth Error",
+          description: "Failed to restore your session. Please log in again.",
+          variant: "destructive",
+        });
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+          
+          // Show verification notification if user just verified email
+          if (event === 'SIGNED_IN' && session.user.email_confirmed_at) {
+            toast({
+              title: "Account Verified! 🎉",
+              description: "Your email has been successfully verified. Welcome to SAKURAZE!",
+              duration: 5000,
+            });
+          }
+        } else {
+          setProfile(null);
+          setIsLoading(false);
+        }
+
+        // Handle different auth events
+        switch (event) {
+          case 'SIGNED_OUT':
+            setProfile(null);
+            break;
+          case 'TOKEN_REFRESHED':
+            console.log('Auth token refreshed');
+            break;
+          case 'USER_UPDATED':
+            if (session?.user) {
+              await fetchProfile(session.user.id);
+            }
+            break;
+        }
       }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [toast]);
@@ -130,14 +167,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password
+      });
+
       if (error) {
+        console.error('Sign in error:', error);
         toast({
           title: "Login Failed",
           description: error.message,
           variant: "destructive",
         });
         return { error };
+      }
+
+      if (!data.user) {
+        throw new Error('No user data received');
       }
       
       toast({
@@ -147,13 +193,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       navigate('/');
       return { error: null };
     } catch (error: any) {
+      console.error('Unexpected sign in error:', error);
+      toast({
+        title: "Login Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
       return { error };
     }
   };
 
   const signUp = async (email: string, password: string, username: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      // First check if username is already taken
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .single();
+
+      if (existingUser) {
+        toast({
+          title: "Signup Failed",
+          description: "Username is already taken",
+          variant: "destructive",
+        });
+        return { error: new Error('Username is already taken') };
+      }
+
+      // Proceed with signup
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -161,10 +230,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             username,
             display_name: username,
           },
+          emailRedirectTo: window.location.origin + '/auth/callback'
         },
       });
 
       if (error) {
+        console.error('Sign up error:', error);
         toast({
           title: "Signup Failed",
           description: error.message,
@@ -173,23 +244,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error };
       }
 
+      if (data.user?.identities?.length === 0) {
+        toast({
+          title: "Account Exists",
+          description: "An account with this email already exists. Please log in instead.",
+          variant: "destructive",
+        });
+        return { error: new Error('Account exists') };
+      }
+
       toast({
         title: "Signup Successful",
         description: "Please check your email for confirmation.",
       });
       return { error: null };
     } catch (error: any) {
+      console.error('Unexpected sign up error:', error);
+      toast({
+        title: "Signup Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
       return { error };
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
-    toast({
-      title: "Logged Out",
-      description: "You have been logged out successfully.",
-    });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      setProfile(null);
+      setUser(null);
+      setSession(null);
+      navigate('/');
+      
+      toast({
+        title: "Logged Out",
+        description: "You have been logged out successfully.",
+      });
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
