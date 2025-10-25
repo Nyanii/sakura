@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import NovelCard from '@/components/novels/NovelCard';
+import EditProfileForm from '@/components/profile/EditProfileForm';
 import { Novel } from '@/types/novels';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -20,6 +21,142 @@ const Profile = () => {
   const [bookmarkedNovels, setBookmarkedNovels] = useState<Novel[]>([]);
   const [readingHistory, setReadingHistory] = useState<Novel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const fetchProfileData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch user profile using context
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        toast({
+          title: "Error Loading Profile",
+          description: "There was an error loading your profile. Trying to create one...",
+          variant: "destructive",
+        });
+        
+        // Attempt to create profile
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: user.id,
+              username: user.email?.split('@')[0] || `user_${Date.now()}`,
+              display_name: user.user_metadata?.display_name || null,
+              avatar_url: null,
+              bio: null,
+              coins: 0
+            }
+          ])
+          .select()
+          .single();
+
+        if (createError) {
+          toast({
+            title: "Profile Creation Failed",
+            description: "Could not create your profile. Please try again later.",
+            variant: "destructive",
+          });
+          throw createError;
+        }
+        
+        setProfile(newProfile);
+        toast({
+          title: "Profile Created",
+          description: "Your profile has been created successfully!",
+        });
+      } else {
+        setProfile(profileData);
+      }
+
+      // Fetch bookmarked novels
+      const { data: bookmarks, error: bookmarksError } = await supabase
+        .from('bookmarks')
+        .select('novel_id')
+        .eq('user_id', user.id);
+
+      if (bookmarksError) throw bookmarksError;
+
+      if (bookmarks && bookmarks.length > 0) {
+        const novelIds = bookmarks.map(bookmark => bookmark.novel_id);
+        
+        const { data: novels, error: novelsError } = await supabase
+          .from('novels')
+          .select(`
+            *,
+            profiles!novels_author_id_fkey(username, display_name)
+          `)
+          .in('id', novelIds);
+
+        if (novelsError) throw novelsError;
+
+        if (novels) {
+          setBookmarkedNovels(novels.map(formatNovel));
+        }
+      }
+
+      // Fetch reading history
+      const { data: history, error: historyError } = await supabase
+        .from('reading_history')
+        .select('novel_id')
+        .eq('user_id', user.id)
+        .order('read_at', { ascending: false })
+        .limit(10);
+
+      if (historyError) throw historyError;
+
+      if (history && history.length > 0) {
+        const novelIds = [...new Set(history.map(item => item.novel_id))];
+        
+        const { data: novels, error: novelsError } = await supabase
+          .from('novels')
+          .select(`
+            *,
+            profiles!novels_author_id_fkey(username, display_name)
+          `)
+          .in('id', novelIds);
+
+        if (novelsError) throw novelsError;
+
+        if (novels) {
+          setReadingHistory(novels.map(formatNovel));
+        }
+      }
+
+    } catch (error) {
+      console.error('Error fetching profile data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load profile data',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatNovel = (novel: any): Novel => ({
+    id: novel.id,
+    title: novel.title,
+    author: novel.profiles?.display_name || novel.profiles?.username || 'Unknown Author',
+    authorId: novel.author_id,
+    coverImage: novel.cover_image || '/placeholder.svg',
+    rating: novel.rating || 0,
+    views: novel.views || 0,
+    bookmarks: novel.bookmarks || 0,
+    genres: [],
+    status: novel.status as "Ongoing" | "Completed" | "Hiatus",
+    chapters: [],
+    tags: [],
+    createdAt: novel.created_at,
+    updatedAt: novel.updated_at,
+    description: novel.description || '',
+  });
 
   useEffect(() => {
     if (!user) {
@@ -184,7 +321,7 @@ const Profile = () => {
     };
 
     fetchProfileData();
-  }, [user, navigate, toast]);
+  }, [user, navigate]);
 
   if (isLoading) {
     return (
@@ -241,12 +378,27 @@ const Profile = () => {
             </div>
           </div>
           <div className="mt-4 flex justify-end">
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsEditing(true)}
+            >
               Edit Profile
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg">
+            <EditProfileForm
+              onClose={() => setIsEditing(false)}
+              onProfileUpdate={fetchProfileData}
+            />
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="bookmarks">
         <TabsList className="grid w-full grid-cols-2">
