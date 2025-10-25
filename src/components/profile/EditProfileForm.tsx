@@ -2,19 +2,21 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2 } from 'lucide-react';
 
 interface EditProfileFormProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
   onProfileUpdate: () => void;
 }
 
-const EditProfileForm: React.FC<EditProfileFormProps> = ({ onProfileUpdate }) => {
+const EditProfileForm: React.FC<EditProfileFormProps> = ({ isOpen, onOpenChange, onProfileUpdate }) => {
   const { user, profile, updateProfile } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -144,7 +146,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ onProfileUpdate }) =>
       });
 
       onProfileUpdate();
-      onClose();
+      onOpenChange(false);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -157,67 +159,74 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ onProfileUpdate }) =>
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Edit Profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex flex-col items-center space-y-4">
-            <Avatar className="w-24 h-24">
-              <AvatarImage src={avatarPreview || profile?.avatar_url} />
-              <AvatarFallback>{profile?.username?.[0]?.toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div>
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarChange}
-                className="hidden"
-                id="avatar-upload"
-              />
-              <Label htmlFor="avatar-upload" className="cursor-pointer">
-                <Button type="button" variant="outline" onClick={() => document.getElementById('avatar-upload')?.click()}>
-                  Change Avatar
-                </Button>
-              </Label>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <div>
+        <DialogTitle>Edit Profile</DialogTitle>
+        <DialogDescription>
+          Make changes to your profile here. Click save when you're done.
+        </DialogDescription>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex flex-col items-center space-y-4">
+          <Avatar className="w-24 h-24">
+            <AvatarImage src={avatarPreview || profile?.avatar_url} />
+            <AvatarFallback>{profile?.username?.[0]?.toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div>
             <Input
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleInputChange}
-              required
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="hidden"
+              id="avatar-upload"
             />
+            <Label htmlFor="avatar-upload" className="cursor-pointer">
+              <Button type="button" variant="outline" onClick={() => document.getElementById('avatar-upload')?.click()}>
+                Change Avatar
+              </Button>
+            </Label>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="display_name">Display Name</Label>
-            <Input
-              id="display_name"
-              name="display_name"
-              value={formData.display_name}
-              onChange={handleInputChange}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="username">Username</Label>
+          <Input
+            id="username"
+            name="username"
+            value={formData.username}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="bio">Bio</Label>
-            <Textarea
-              id="bio"
-              name="bio"
-              value={formData.bio}
-              onChange={handleInputChange}
-              rows={4}
-              placeholder="Tell us about yourself..."
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="display_name">Display Name</Label>
+          <Input
+            id="display_name"
+            name="display_name"
+            value={formData.display_name}
+            onChange={handleInputChange}
+          />
+        </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
+        <div className="space-y-2">
+          <Label htmlFor="bio">Bio</Label>
+          <Textarea
+            id="bio"
+            name="bio"
+            value={formData.bio}
+            onChange={handleInputChange}
+            rows={4}
+            placeholder="Tell us about yourself..."
+          />
+        </div>
+
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -227,9 +236,9 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ onProfileUpdate }) =>
               'Save Changes'
             )}
           </Button>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      </form>
+    </div>
   );
 };
 

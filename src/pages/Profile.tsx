@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -389,16 +390,15 @@ const Profile = () => {
         </CardContent>
       </Card>
 
-      {isEditing && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-lg">
-            <EditProfileForm
-              onClose={() => setIsEditing(false)}
-              onProfileUpdate={fetchProfileData}
-            />
-          </div>
-        </div>
-      )}
+      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+        <DialogContent className="sm:max-w-lg">
+          <EditProfileForm
+            isOpen={isEditing}
+            onOpenChange={setIsEditing}
+            onProfileUpdate={fetchProfileData}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="bookmarks">
         <TabsList className="grid w-full grid-cols-2">
