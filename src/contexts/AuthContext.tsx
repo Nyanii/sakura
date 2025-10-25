@@ -40,7 +40,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function getInitialSession() {
       try {
-        setIsLoading(true);
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
@@ -48,8 +47,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (mounted) {
           setSession(session);
           setUser(session?.user ?? null);
+          
           if (session?.user) {
             await fetchProfile(session.user.id);
+          } else {
+            setProfile(null);
+            setIsLoading(false);
           }
         }
       } catch (error) {
@@ -59,8 +62,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "Failed to restore your session. Please log in again.",
           variant: "destructive",
         });
-      } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsLoading(false);
+        }
       }
     }
 
@@ -68,6 +75,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (mounted) {
+        console.log('Auth state change:', event, session); // Debug log
+        
+        if (event === 'SIGNED_OUT') {
+          // Clear all auth state immediately on sign out
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsLoading(false);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -87,11 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsLoading(false);
         }
 
-        // Handle different auth events
         switch (event) {
-          case 'SIGNED_OUT':
-            setProfile(null);
-            break;
           case 'TOKEN_REFRESHED':
             console.log('Auth token refreshed');
             break;
@@ -112,6 +126,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
+      setIsLoading(true);
+      
       // First try to fetch the existing profile
       const { data, error } = await supabase
         .from('profiles')
@@ -123,13 +139,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error.code === 'PGRST116') {
           // Profile doesn't exist, create one
           const { data: userData } = await supabase.auth.getUser();
+          if (!userData.user) throw new Error('User data not available');
+          
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
             .insert([
               {
                 id: userId,
-                username: userData.user?.email?.split('@')[0] || `user_${Date.now()}`,
-                display_name: userData.user?.user_metadata?.display_name || null,
+                username: userData.user.email?.split('@')[0] || `user_${Date.now()}`,
+                display_name: userData.user.user_metadata?.display_name || null,
                 avatar_url: null,
                 bio: null,
                 coins: 0
@@ -147,19 +165,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Profile Created",
             description: "Your profile has been created successfully.",
           });
-        } else {
-          throw error;
+          return;
         }
-      } else {
-        setProfile(data);
+        throw error;
       }
-    } catch (error) {
+      
+      setProfile(data);
+    } catch (error: any) {
       console.error('Error in profile operation:', error);
       toast({
         title: "Error",
-        description: "There was an error loading your profile. Please try again.",
+        description: error.message || "There was an error loading your profile. Please try again.",
         variant: "destructive",
       });
+      setProfile(null);
     } finally {
       setIsLoading(false);
     }
@@ -274,15 +293,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
+      // Clear all auth-related state immediately
       setProfile(null);
       setUser(null);
       setSession(null);
-      navigate('/');
+      setIsLoading(false);
       
+      // Show success message
       toast({
         title: "Logged Out",
         description: "You have been logged out successfully.",
       });
+
+      // Navigate after state is cleared
+      navigate('/auth/login');
     } catch (error: any) {
       console.error('Sign out error:', error);
       toast({
