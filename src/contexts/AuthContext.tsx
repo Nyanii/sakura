@@ -36,8 +36,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { toast } = useToast();
 
   useEffect(() => {
+    // Handle auth state changes including email verification
+    const authListener = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      }
+      if (event === 'SIGNED_IN') {
+        // Check if the user just verified their email
+        if (session?.user?.email_confirmed_at) {
+          toast({
+            title: "Account Verified! 🎉",
+            description: "Your email has been successfully verified. Welcome to SAKURAZE!",
+            duration: 5000,
+          });
+        }
+      }
+    });
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
