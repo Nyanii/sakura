@@ -202,7 +202,7 @@ CREATE TABLE public.reading_history (
 CREATE TABLE public.site_settings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   site_name text NOT NULL DEFAULT 'SAKURAZE'::text,
-  footer_site_name text NOT NULL DEFAULT 'NovelHaven'::text,
+  footer_site_name text NOT NULL DEFAULT 'Sakuraze'::text,
   site_tagline text NOT NULL DEFAULT 'Discover the best stories from emerging and established authors.'::text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),

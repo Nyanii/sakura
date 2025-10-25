@@ -32,7 +32,7 @@ interface SiteSettings {
 
 const defaultSettings = {
   site_name: 'SAKURAZE',
-  footer_site_name: 'NovelHaven',
+  footer_site_name: 'Sakuraze',
   site_tagline: 'Discover the best stories from emerging and established authors.'
 };
 

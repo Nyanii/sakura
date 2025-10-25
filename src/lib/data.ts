@@ -1,5 +1,5 @@
 
-// Mock data for the NovelHaven app
+// Mock data for the Sakuraze app
 
 export interface Novel {
   id: string;
