@@ -37,8 +37,32 @@ const Profile = () => {
           .eq('id', user.id)
           .single();
 
-        if (profileError) throw profileError;
-        setProfile(profileData);
+        if (profileError) {
+          // If profile doesn't exist, create it
+          if (profileError.code === 'PGRST116') {
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert([
+                {
+                  id: user.id,
+                  username: user.email?.split('@')[0] || `user_${Date.now()}`,
+                  display_name: user.user_metadata.display_name || null,
+                  avatar_url: null,
+                  bio: null,
+                  coins: 0
+                }
+              ])
+              .select()
+              .single();
+
+            if (createError) throw createError;
+            setProfile(newProfile);
+          } else {
+            throw profileError;
+          }
+        } else {
+          setProfile(profileData);
+        }
 
         // Fetch bookmarked novels
         const { data: bookmarks, error: bookmarksError } = await supabase
