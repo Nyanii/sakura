@@ -30,7 +30,7 @@ const Profile = () => {
     const fetchProfileData = async () => {
       setIsLoading(true);
       try {
-        // Fetch user profile
+        // Fetch user profile using context
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -38,28 +38,42 @@ const Profile = () => {
           .single();
 
         if (profileError) {
-          // If profile doesn't exist, create it
-          if (profileError.code === 'PGRST116') {
-            const { data: newProfile, error: createError } = await supabase
-              .from('profiles')
-              .insert([
-                {
-                  id: user.id,
-                  username: user.email?.split('@')[0] || `user_${Date.now()}`,
-                  display_name: user.user_metadata.display_name || null,
-                  avatar_url: null,
-                  bio: null,
-                  coins: 0
-                }
-              ])
-              .select()
-              .single();
+          toast({
+            title: "Error Loading Profile",
+            description: "There was an error loading your profile. Trying to create one...",
+            variant: "destructive",
+          });
+          
+          // Attempt to create profile
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: user.id,
+                username: user.email?.split('@')[0] || `user_${Date.now()}`,
+                display_name: user.user_metadata?.display_name || null,
+                avatar_url: null,
+                bio: null,
+                coins: 0
+              }
+            ])
+            .select()
+            .single();
 
-            if (createError) throw createError;
-            setProfile(newProfile);
-          } else {
-            throw profileError;
+          if (createError) {
+            toast({
+              title: "Profile Creation Failed",
+              description: "Could not create your profile. Please try again later.",
+              variant: "destructive",
+            });
+            throw createError;
           }
+          
+          setProfile(newProfile);
+          toast({
+            title: "Profile Created",
+            description: "Your profile has been created successfully!",
+          });
         } else {
           setProfile(profileData);
         }

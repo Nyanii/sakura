@@ -75,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
+      // First try to fetch the existing profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -82,12 +83,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist, create one
+          const { data: userData } = await supabase.auth.getUser();
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: userId,
+                username: userData.user?.email?.split('@')[0] || `user_${Date.now()}`,
+                display_name: userData.user?.user_metadata?.display_name || null,
+                avatar_url: null,
+                bio: null,
+                coins: 0
+              }
+            ])
+            .select()
+            .single();
+
+          if (createError) {
+            throw createError;
+          }
+          
+          setProfile(newProfile);
+          toast({
+            title: "Profile Created",
+            description: "Your profile has been created successfully.",
+          });
+        } else {
+          throw error;
+        }
       } else {
         setProfile(data);
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error in profile operation:', error);
+      toast({
+        title: "Error",
+        description: "There was an error loading your profile. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
