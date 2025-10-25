@@ -94,6 +94,10 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ isOpen, onOpenChange,
     setIsLoading(true);
 
     try {
+      if (!user) {
+        throw new Error('You must be logged in to update your profile');
+      }
+
       // Validate form data
       if (!formData.username.trim()) {
         throw new Error('Username is required');
@@ -113,6 +117,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ isOpen, onOpenChange,
         const { data: existingUser, error: checkError } = await supabase
           .from('profiles')
           .select('username')
+          .neq('id', user.id)
           .eq('username', formData.username)
           .single();
 
@@ -130,6 +135,8 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ isOpen, onOpenChange,
         const uploadedUrl = await uploadAvatar(avatarFile);
         if (uploadedUrl) {
           avatar_url = uploadedUrl;
+        } else {
+          throw new Error('Failed to upload avatar');
         }
       }
 

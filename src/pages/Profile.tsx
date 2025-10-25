@@ -15,65 +15,22 @@ import { Novel } from '@/types/novels';
 import { useToast } from '@/components/ui/use-toast';
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<any>(null);
   const [bookmarkedNovels, setBookmarkedNovels] = useState<Novel[]>([]);
   const [readingHistory, setReadingHistory] = useState<Novel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
   const fetchProfileData = async () => {
+    if (!user) {
+      navigate('/auth/login');
+      return;
+    }
+    
     setIsLoading(true);
     try {
-      // Fetch user profile using context
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) {
-        toast({
-          title: "Error Loading Profile",
-          description: "There was an error loading your profile. Trying to create one...",
-          variant: "destructive",
-        });
-        
-        // Attempt to create profile
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: user.id,
-              username: user.email?.split('@')[0] || `user_${Date.now()}`,
-              display_name: user.user_metadata?.display_name || null,
-              avatar_url: null,
-              bio: null,
-              coins: 0
-            }
-          ])
-          .select()
-          .single();
-
-        if (createError) {
-          toast({
-            title: "Profile Creation Failed",
-            description: "Could not create your profile. Please try again later.",
-            variant: "destructive",
-          });
-          throw createError;
-        }
-        
-        setProfile(newProfile);
-        toast({
-          title: "Profile Created",
-          description: "Your profile has been created successfully!",
-        });
-      } else {
-        setProfile(profileData);
-      }
 
       // Fetch bookmarked novels
       const { data: bookmarks, error: bookmarksError } = await supabase
@@ -322,9 +279,9 @@ const Profile = () => {
     };
 
     fetchProfileData();
-  }, [user, navigate]);
+  }, [user, authProfile, navigate]);
 
-  if (isLoading) {
+  if (!authProfile || isLoading) {
     return (
       <div className="container max-w-4xl py-8">
         <div className="text-center">
@@ -334,7 +291,7 @@ const Profile = () => {
     );
   }
 
-  if (!profile) {
+  if (!authProfile) {
     return (
       <div className="container max-w-4xl py-8">
         <div className="text-center">
@@ -353,16 +310,16 @@ const Profile = () => {
         <CardHeader>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={profile.avatar_url || ''} alt={profile.display_name || profile.username} />
-              <AvatarFallback>{(profile.display_name || profile.username || 'User')[0].toUpperCase()}</AvatarFallback>
+              <AvatarImage src={authProfile.avatar_url || ''} alt={authProfile.display_name || authProfile.username} />
+              <AvatarFallback>{(authProfile.display_name || authProfile.username || 'User')[0].toUpperCase()}</AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-2xl">{profile.display_name || profile.username}</CardTitle>
-              {profile.display_name && profile.username && (
-                <p className="text-sm text-muted-foreground">@{profile.username}</p>
+              <CardTitle className="text-2xl">{authProfile.display_name || authProfile.username}</CardTitle>
+              {authProfile.display_name && authProfile.username && (
+                <p className="text-sm text-muted-foreground">@{authProfile.username}</p>
               )}
-              {profile.bio && (
-                <p className="mt-2 text-sm">{profile.bio}</p>
+              {authProfile.bio && (
+                <p className="mt-2 text-sm">{authProfile.bio}</p>
               )}
             </div>
           </div>
@@ -370,7 +327,7 @@ const Profile = () => {
         <CardContent>
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold">{profile.coins}</p>
+              <p className="text-2xl font-bold">{authProfile.coins}</p>
               <p className="text-sm text-muted-foreground">Coins</p>
             </div>
             <div>
